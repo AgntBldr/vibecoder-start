@@ -1,0 +1,9 @@
+[
+  {"id":"search-whole-files","title":"Search whole files","verdict":"trigger","scope":"project","reason":"Recall below 22 of a reference 24 probes","trigger":{"metric":"recall.totals.searchHitRate","op":"<","value":0.9166666666666666}},
+  {"id":"vector-search","title":"Vector search","verdict":"trigger","scope":"project","reason":"Recall below 20 of a reference 24 probes twice","trigger":{"metric":"recall.totals.searchHitRate","op":"<","value":0.8333333333333334,"consecutive":2}},
+  {"id":"tiny-profile","title":"Tiny memory profile","verdict":"trigger","scope":"fleet","reason":"Generated indexes exceed lesson bytes in at least two installed memories under 15 KB","trigger":{"metric":"fleet.tinyIndexProjects","op":">=","value":2}},
+  {"id":"warn-autofix","title":"WARN autofix","verdict":"trigger","scope":"fleet","reason":"The same WARN check appears on at least three projects","trigger":{"metric":"fleet.maxWarnProjects","op":">=","value":3}},
+  {"id":"ci-gate","title":"CI gate","verdict":"trigger","scope":"fleet","reason":"A committed project state has a gate FAIL","trigger":{"metric":"fleet.committedFailProjects","op":">","value":0}},
+  {"id":"bm25s","title":"BM25S","verdict":"never","scope":"project","reason":"Adds Python, buys nothing"},
+  {"id":"lightrag-memory","title":"LightRAG memory","verdict":"never","scope":"project","reason":"Raw documents only"}
+]

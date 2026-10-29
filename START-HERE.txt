@@ -1,0 +1,18 @@
+VIBECODER START - READ THIS FIRST
+
+This folder is a starter for building software with an AI assistant (Claude Code). You do not need to be a programmer.
+
+1. Open the guide:  docs/00-first-session.md
+   Mac: right-click the file, choose "Open With", then "TextEdit".
+   Windows: right-click the file, choose "Open with", then "Notepad".
+   Follow it from top to bottom. It takes about 20 minutes once the tools listed in item 2 below are installed (allow an hour or more on a new computer) and works on Mac and Windows.
+   In a plain editor you will see marks like | and **: ignore them. Never copy the ` (backtick) marks around a command - copy only the words inside. Links do not click here: copy web addresses into your browser.
+
+2. Before you start you need: Git, Node.js 22 or newer, Claude Code (needs a paid Claude plan: Pro, Max, Team or Enterprise), and a free GitHub account. On a Mac you also need the GitHub CLI ("gh").
+   The guide tells you how to install each one. If the Mac asks you to install "command line developer tools", say Install and wait; ignore any note that mentions xcode-select or sudo.
+
+3. Keep this folder in your HOME folder (not Downloads), and give it a name with only letters, numbers and hyphens.
+
+4. If anything looks wrong, stop and copy the exact message you see. Send it with the number of the step you were on.
+
+After the first session, every later session starts with the three lines in docs/01-every-session.md.

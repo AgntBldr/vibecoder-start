@@ -1,0 +1,22 @@
+# secrets: keys live in .env, which never enters git; .env.example is the documented template
+.env
+.env.*
+!.env.example
+
+# the memory kit's machine-local paths
+scripts/memory/KIT.local.json
+scripts/memory/.kit-backup-*/
+
+# dependencies and build output
+node_modules/
+dist/
+build/
+.cache/
+
+# operating systems and editors (editor colours such as Peacock stay on your machine)
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/

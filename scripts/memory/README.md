@@ -1,0 +1,420 @@
+# Memory engine v3
+
+Terms: see [GLOSSARY.md](GLOSSARY.md). Links to GLOSSARY.md, CONVERT.md and UPGRADE.md
+resolve after installation under `scripts/memory/`; in the kit tree these guides are under `docs/`.
+
+## Section list
+
+1. [Commands, ladder and caps](#commands-ladder-and-caps)
+2. [Exact block conservation](#exact-block-conservation)
+3. [Conversion procedure](CONVERT.md) and [upgrade recovery](UPGRADE.md)
+4. [Rotate the brain log](#rotate-the-brain-log)
+5. [Shelf and review dates](#shelf-and-review-dates)
+6. [External shared-core edges](#external-shared-core-edges)
+7. [Generate the roadmap overview](#generate-the-roadmap-overview)
+8. [Generate the brain indexes](#generate-the-brain-indexes)
+9. [Kit ownership](#kit-ownership)
+
+## Commands, ladder and caps
+
+`node scripts/memory/memory-init.mjs [--memory-dir <MEMORY>] [--dry-run]` creates missing private memory when the engine is already installed. It uses the installer's memory setup, runs the gate and installs the hook; an existing folder is left unchanged. It prints private remote setup commands only for memory outside the repository (none for memory inside it).
+
+Stage 2: `memory-migrate.mjs convert --memory-dir D [--source FILE]
+[--classes FILE] [--tag NAME] [--write]` splits original lesson blocks without changing their
+body bytes (including CRLF). The default is a JSON dry run. A classes JSON object
+maps every assigned id, including unnumbered/duplicate ids, to one craft activity.
+Write mode refuses unparsed candidates and existing targets, writes lesson files
+and index lines first, then replaces the source with a recovery stub. A stub run
+is a no-op. Missing dates are reported; they are never inferred from later lessons.
+
+`lessons.cite` fails on unresolved `#N`/`#Nb` references in craft indexes or the
+router once lesson files exist. `brain.pointer` fails on invalid/missing `brain:`
+targets; `brain.pointer-missing` warns for project/reference memories whose name
+exactly matches a brain id after removing its type prefix and trailing date.
+
+Gate and measure accept `--no-git` for fenced migration copies. This invokes no
+git commands and emits `repo.git-skipped`: git health and committed-age coverage
+are explicitly unavailable. Related allow entries are not assessed for staleness.
+
+Conversion procedures and review gates live in [CONVERT](CONVERT.md).
+
+Dependency-free Node 22 tools for gating, searching and measuring private Claude
+memory and the repository's typed markdown brain. No package installation is
+needed. All scripts are importable ESM modules; importing them has no CLI effects.
+
+Every CLI accepts `--memory-dir PATH` and `--repo PATH`. The repo defaults to this
+toolset's repository. Memory precedence is `--memory-dir`, `CLAUDE_MEMORY_DIR`, installed
+`scripts/memory/memory.config.json` `memory.inRepoDir` (relative to the current checkout),
+then `scripts/memory/KIT.local.json` `memoryDir` (only when that directory exists), then the matching
+`~/.claude/projects/<absolute-repo-path-slug>/memory` directory (case-insensitive
+fallback; home from `USERPROFILE` then `HOME`). Explicit paths are recommended for fixtures and migrations.
+
+| Tool | Purpose and example |
+| --- | --- |
+| `memory-lesson.mjs batch` | Capture several filled lessons: `node scripts/memory/memory-lesson.mjs batch FILE [--route FAMILY] [--dry-run]`. Keep FILE outside memory; each creating section requires `kind`; optional `trigger`, `supersedes` and `date` keys are described in templates/lesson-batch.md. |
+| `memory-lesson.mjs repeat` | Record recurrence: `node scripts/memory/memory-lesson.mjs repeat ID "<slip\|not-recalled\|rule-wrong\|new-case>: <note>"`; preview legacy conversion with `node scripts/memory/memory-lesson.mjs repeat --from-legacy`, then add `--write`. The legacy scan skips fenced code and caps automatic conversion at 20 repeats per paragraph; larger counts require manual recording. Flow-map metadata and top-level target keys are refused; move them into block metadata first. Use the -- separator as `repeat ID -- "slip: --option-like note"` for option-like note text. |
+| `memory-lesson.mjs classify` | Preview a version-1 JSON kinds map outside memory with `classify FILE`; add `--write` to apply all labels atomically and regenerate, then run the gate. List cases with `--case Kn`; compare labels with `--score A.json B.json [--reference reference.json]`. |
+| `memory-lesson.mjs enforce` | Record enforcement: `node scripts/memory/memory-lesson.mjs enforce ID "hard-rule FILE\|check ID-or-PATH\|hook PATH\|lesson-only REASON"`. |
+| `memory-check.mjs` | Size, links, descriptions, secrets, lesson identities, git health and brain integrity. `node scripts/memory/memory-check.mjs --scope memory` |
+| `memory-recall.mjs` | Weighted BM25 search. `node scripts/memory/memory-recall.mjs "model routing" --k 5` |
+| `memory-measure.mjs` | Session bytes, hard-rule trigger bytes, ladder/search recall cost, gate counts and correction proxy. `node scripts/memory/memory-measure.mjs --probe path/to/probes.json --json` |
+| `memory-conserve.mjs` | Prove token presence or exact block conservation. `node scripts/memory/memory-conserve.mjs snapshot --out baseline.json`; then `node scripts/memory/memory-conserve.mjs verify --baseline baseline.json`. See block mode below. |
+| `memory-migrate.mjs` | Split numbered lessons; dry run by default. `node scripts/memory/memory-migrate.mjs convert --repo PATH --memory-dir COPY --source lessons.md`. `--source` is one Markdown filename inside memory; `--write` applies the migration. |
+| `install-hooks.mjs` | Install the memory repo's pre-commit gate; `--uninstall` removes only this tool's hook. Foreign hooks are preserved. |
+| `lib.mjs` | Paths, restricted frontmatter parsing, links, file discovery and common CLI helpers. |
+
+`memory-lesson.mjs batch --json` returns `created` as `{file, similar}[]` (previously `string[]`).
+
+Gate output supports `--json`. `--session-start` emits at most five gate lines plus one repeat-summary line and
+always exits zero; normal gate runs exit one on a non-allowed FAIL. Memory scope
+does not gate brain files, but reads node names/ids to resolve memory wikilinks.
+Normal runs are read-only, including git status/history inspection. No tool
+commits, pushes, installs dependencies or invokes a model.
+
+Keep snapshots, tags and review evidence in durable project storage before deleting a migration work copy.
+
+`memory.config.json` controls caps, pins and allow entries. `--ratchet-pins` sets
+each hand-written index pin to the smaller of its old pin and current bytes plus slack; it
+never raises an existing pin and removes obsolete pins. `--config FILE` lets the
+gate operate on a fixture config instead. `--write-allowlist "reason"` appends
+current findings, deduplicated by check and file. Both options write the config.
+
+Allow entries require `check`, `file`, a nonempty `reason`, and `added` (UTC
+`YYYY-MM-DD`), and may carry `ceiling`. The file pattern supports `*`. Matching
+findings remain in JSON with `allowed: true`, but do not count as failures or
+warnings. The allowlist is a RATCHET: `--write-allowlist` records the measured
+value as `ceiling`, and a finding that grows past its ceiling is reported again
+(`grew past allowed ceiling N`); the writer never raises a ceiling and never adds a
+per-file entry under an existing wildcard entry. Never raise a ceiling or a pin to
+make the gate pass: move the detail down a layer. An entry without `ceiling` is for
+files that grow by design until they are rotated (the roadmap and the brain log).
+`secret`, `config.*` and parse-error (`fm.parse` FAIL) findings cannot be allowed.
+Missing fields or a bad ceiling fail `config.allow`; an entry for a check the run
+evaluated that matches nothing warns `config.allow-stale` (memory scope skips the
+repo layer, and `--hook` skips the remote/ahead/uncommitted checks).
+Every finding message is passed through redaction: a secret is shown as
+`[REDACTED:<pattern>]`, never as text.
+
+`--hook` is what the memory repo's pre-commit runs (`--hook --scope memory`): it
+checks a staged snapshot extracted with git checkout-index. Snapshot errors block
+the commit. SessionStart alone remains nonblocking. A stub
+is a file with `moved_to:` (a filename or a list); each target must be an existing
+file inside the memory directory, or a `brain/...` path inside the repo.
+
+`repo.skill-version` warns in `--scope all` and `--session-start` when an existing
+`.claude/skills/memory-ladder/SKILL.md` or `.claude/skills/memory-review/SKILL.md`
+has a missing or mismatched frontmatter `engine_version`. Compare against
+`memory.config.json` (its version matches `VERSION`). Absent files produce no finding.
+`--hook` and memory-only scope skip this check and its allowlist-staleness check.
+Update the instructions and version together; do not merely stamp stale prose.
+
+Recall accepts `--memory-only`, `--brain-only`, `--json`, and `--probe [FILE]`.
+The default probe file is `scripts/memory/recall-probes.json`, supplied separately;
+this toolset does not create it. Probes match any expected path substring in the
+top three results and exit one below `minPass`. Measure uses the same probe file;
+`--write LABEL` creates JSON and Markdown evidence in
+`<measure.evidenceDir>/YYYY-MM-DD-LABEL.*` (default `docs/evidence/memory`). Without it, no evidence is written.
+`sessionStart` counts the router, `AGENTS.md`, `CLAUDE.md`, and the last
+`measure.startLogTailEntries` (10) complete brain-log entries. An entry starts at
+a line beginning `## [` and ends before the next entry; omit the log preamble.
+With fewer entries, count all entries; with none, count zero log-tail bytes.
+`sessionStartLegacy` retains the old metric using `measure.startLogTailLines`
+(40), including the old terminal-newline handling, for comparison with earlier
+measurements. Both values appear in JSON and the readable metrics table.
+Both tail settings must be positive integers; invalid values stop measurement
+with an error naming the setting.
+Conservation accepts `--accepted FILE` with migration decisions recorded
+as `{ "accepted": [{ "token": "...", "reason": "..." }] }`; every reason is required.
+Token conservation checks memory, all brain Markdown (including system files),
+ROADMAP files, and `docs/shelf/**/*.md`; an absent shelf is fine. It proves token
+presence, not semantic equivalence. Forgetting is a proxy,
+not a measured recurrence rate; undated corrections have no month bucket.
+
+## Exact block conservation
+
+```sh
+node scripts/memory/memory-conserve.mjs blocks-snapshot --out blocks.json --source docs/ROADMAP.md --source brain/00-system/log.md
+node scripts/memory/memory-conserve.mjs blocks-verify --baseline blocks.json --dest docs/ROADMAP.md --dest docs/ROADMAP-HISTORY.md --dest brain/00-system/log.md --dest brain/00-system/log-history.md --json
+```
+
+Name every source and destination explicitly; repeat `--source` or `--dest`.
+Paths may be absolute or relative to `--repo` (default: this repository).
+Duplicate spellings of one path are read once. Block mode does not access the
+private memory directory. Missing input files fail instead of becoming empty
+sources. A source with zero blocks also fails snapshot creation; empty
+destinations remain valid so verification can report missing blocks. Keep the
+snapshot outside the moved sources.
+
+Split at lines beginning `## ` outside backtick or tilde fences. Preserve any
+text before the first heading as a `kind: preamble` block. Strip a leading UTF-8 BOM
+before splitting and normalize CRLF to LF. Drop each block's trailing blank lines
+and newlines, then add exactly one `\n` before hashing and counting bytes.
+Preserve all other whitespace, including spaces on nonblank content lines.
+This lets a last block without a final newline move into the middle of a file.
+Each record has repository-relative `source`, zero-based `index`, `heading`
+(first line, truncated to 200 characters), UTF-8 `bytes`, and `sha256`. A
+`headingSha256` retains full-line identity for long headings; `kind` distinguishes
+preamble from section. Empty files have no blocks.
+
+Verify exact hash multiplicity across all destinations: 2 baseline copies need
+2 destination copies. Report `missing` for absent copies, `altered` when a
+replacement has the same complete heading and a hash not accounted for by any
+baseline block, `duplicated` for
+extra hash copies, and `out-of-order` for a source's blocks reordered within a
+single destination. Splitting a source across destinations imposes no order
+between destination files. Extra unrelated blocks are not failures.
+For identical blocks shared by sources, the disambiguation search is bounded
+at 10,000 candidate attempts and 512 levels. If the bound is hit, retain the
+out-of-order finding for review rather than claiming order was proven.
+
+Use `--accepted FILE` with
+`{ "accepted": [{ "source": "docs/ROADMAP.md", "heading": "## Old work", "reason": "Reviewed retirement; retained in git." }] }`.
+Match the snapshot's source and heading exactly. Add a zero-based `index` when
+that pair matches multiple baseline blocks; omitting it is an ambiguity error.
+An optional index must be a nonnegative integer. Require a nonempty reason for
+every entry. A matching finding becomes `accepted`, retains its underlying
+findings, and no longer fails. Other conserved blocks remain `ok`. Entries
+matching no baseline block are printed as `unused accepted entry`; they do not
+fail verification and are included in JSON as `unusedAccepted`.
+
+Text output prints counts by class, then each non-ok block's class, source,
+index and heading, with destination locations for altered blocks. Limit details
+to 50 block lines, then print `… N more (use --json)`. `--json`
+prints every baseline block, status, expected/actual multiplicity, destination
+matches, underlying findings, and accepted reasons. Exit 1 for any non-accepted
+finding or invalid input; exit 0 when every baseline block is ok or accepted.
+Missing or unreadable baseline and accepted files report `cannot read <file>`.
+Use tokens and blocks together: neither proves semantic equivalence of rewrites.
+
+Run `node --test scripts/memory/memory.selftest.mjs` for isolated OS-temp fixtures.
+Node 22.22.2 does not discover tests from `node --test scripts/memory/`; that
+directory argument fails with `MODULE_NOT_FOUND`. Tests create no real git repos,
+run no git commands, and never inspect real memory or the brain. Run
+`node --check scripts/memory/<file>.mjs` for syntax checks.
+
+Background parts are linked from their parent topics. The orphan check follows memory links from router/index/archive roots and detects missing background targets; unrooted cycles do not establish reachability.
+
+## Rotate the brain log
+
+`node scripts/memory/memory-rotate.mjs log [--keep N] [--write] [--json]`
+keeps the last 20 entries by file position by default (`caps.brainLog.keepEntries`).
+Dry runs report destination entry counts and bytes. Write mode preserves the
+preamble and appends older entries unchanged to `log-YYYY-MM.md`, using each
+entry's own date even when dates are out of order. Backtick and tilde fenced
+headings do not start entries. Invalid dates refuse all writes and name the line.
+A repeat run reports `nothing to rotate`. The importable API is `rotateLog`.
+`--keep` requires a non-negative integer. Interrupted appends resume without
+duplicating a completed entry prefix; destinations receive a newline before
+appended entries when needed. The live log is replaced through a temp-file rename.
+
+## Shelf and review dates
+
+Every `docs/shelf/**/*.md` requires `status: shelved`, `shelved: YYYY-MM-DD`,
+and `review: YYYY-MM-DD`. Missing or invalid fields fail `shelf.frontmatter`.
+The gate fails `shelf.frontmatter` when review is more than `caps.shelf.reviewDays`
+(default 90) days after shelved; choose and record the actual review date when shelving.
+`shelf.review-due` warns on or after that UTC date. The gate accepts
+`--today YYYY-MM-DD` for tests and dry runs; `runCheck` accepts the `today` option.
+An absent shelf has no shelf findings. Shelf content is checked in repo scope.
+
+## External shared-core edges
+
+Unresolved edges under `caps.brainShared.paths` (default `brain/_shared/`) are
+collected in JSON `externalEdges` as `{file, key, target}` instead of warnings.
+Normal text output reports their count; session-start output omits it. Other
+checks still apply to shared nodes. Unresolved local edges still warn `brain.edge`.
+
+## Generate the roadmap overview
+
+`node scripts/memory/roadmap-overview.mjs [--write|--check]` prints the generated
+overview by default, writes `docs/ROADMAP-OVERVIEW.md` with `--write`, or exits 1
+when missing or stale with `--check`. `generateOverview` reads the roadmap release
+labels and continuations, Open work lists, Active headings, sorted shelf metadata,
+and history headings. It uses content only, never file dates or current timestamps.
+History is read from `caps.roadmapHistory.path`.
+The gate warns `repo.roadmap-overview` when an existing overview is stale and never writes it. An absent configured file produces no finding.
+
+## Generate the brain indexes
+
+`node scripts/memory/brain-index.mjs [--write|--check]` prints the compact index
+by default; write/check mode covers both `index.md` and `index-all.md` in
+`brain/00-system/`. `generateIndex` uses the gate's node discovery, id sorting,
+and frontmatter updated dates for recency. Only `YYYY-MM-DD` node dates contribute
+to recency. The pillar is selected by type; System links come from
+`caps.brainIndex.systemFiles` (the seven default files). Existing compact-index
+frontmatter is preserved except its updated date. The compact output may not exceed 12,288 bytes;
+overflow refuses output instead of truncating it. `--config FILE` supports fixtures.
+The gate keeps its no-wikilinks warning and also warns on stale generated indexes.
+
+## Extra token-conservation files
+
+Repeat `--file PATH` for repo-relative files in token `snapshot` and `verify` modes.
+For example, `snapshot --out tokens.json --file AGENTS.md`. Baselines record
+`extraFiles`; verify reuses those paths and adds any supplied `--file` paths.
+The APIs accept `extraFiles`. Missing tokens still fail; this does not change
+block mode or prove semantic equivalence.
+
+## Kit ownership
+
+Run every engine CLI in this distribution with explicit `--repo PROJECT --memory-dir MEMORY`.
+Installed copies infer their project from the engine location. Projects without a brain, roadmap or shelf receive no findings for absent configured paths.
+When KIT.json exists, `kit.manifest` warns for each locally edited or missing owned file and for skills whose `engine_version` differs from the installed kit version. A missing or malformed manifest warns as well. Config, probes and the receipt are project-owned and excluded from hashes.
+The migrator defaults to `lessons.md`; a supplied Markdown source name remains the stub name. A longer outer fence contains shorter fences without starting lessons inside it.
+
+Normal text gate runs print `memory: <dir> (<source>)`; JSON output remains JSON,
+and SessionStart stays compact. External custom paths live in ignored `KIT.local.json`; in-repo paths live in tracked
+`memory.inRepoDir`.
+Manifest hashes normalize CRLF to LF. Missing, unreadable or malformed manifest
+content yields WARNs. Generated brain/roadmap checks run whenever their source exists.
+
+## Generated memory indexes (3.2.0)
+
+Routes accept both `--route a --route b` and `--route a,b`, preserving first occurrence order.
+Capture: `node scripts/memory/memory-lesson.mjs new --kind <mistake|practice|observation> --route <family>[,<family>] [--case Kn] [--takeaway fix|method|know] [--trigger "before ..."] [--pin] [--today YYYY-MM-DD] "<title>"`.
+`--today` sets the lesson date and dated heading; omitted, it uses the current UTC date.
+The installed template is `scripts/memory/templates/lesson.md`. Fill TODO before the gate.
+Lesson identities have at least three digits and optional lowercase letters; capture allocates the next numeric part.
+Metadata route, pin, hook (at most 200 characters), and supersedes override top-level fallback values.
+
+Rows and hot-page sentences use `caps.index.warnLineChars` (default 300), shortening descriptions with …. Immutable link prefixes can exceed the cap.
+
+`memory-index.mjs --write` generates hot pages and catalogs; `--check` rejects drift.
+`caps.index.hotBytes` defaults to 8192. Topics and pins always remain, with index.hot-budget WARN
+for overflow. Catalogs paginate at 24576 bytes. Superseded lessons remain in the catalog.
+Generated pages skip hand-written pin rules; index.stale requires regeneration.
+lessons.duplicate, route.missing, route.unknown and lesson.unfilled are FAIL checks.
+Staleness applies to state and caps.stale.types (project and reference by default).
+kit.version fails same-version engine drift; kit.manifest still warns on local edits.
+
+`memory-rotate.mjs roadmap --write` preserves dated Open work blocks in roadmapHistory.path,
+keeping six by default (caps.roadmap.keepBlocks), or at least two under size pressure.
+Blocks start with dated `**YYYY-MM-DD ...` lines; `caps.roadmap.order` states the file's order (default `newest-first`, or `oldest-first`), and rotation moves the oldest by date, breaking ties by that order.
+Invalid `order` produces `config.roadmap-order` (FAIL) and a rotation error. With a valid order, contradictory Open work dates produce `repo.roadmap-order` (WARN). History keeps file order.
+The printed proof compares moved payload bytes and verifies every block in history.
+By design, a pure-link index row keeps no label text when migrated.
+A `[[lesson|label]]` alias is dropped only when the row is otherwise just links;
+`- [[lesson|Nice label]] extra words` keeps it.
+
+`node scripts/memory/memory-checkpoint.mjs` runs indexes, log rotation, roadmap rotation, brain index,
+roadmap overview, gate, memory commit, and push in order. Missing optional project files are skipped.
+A failed or timed-out push is reported and exits 2; the commit remains. --no-push skips it; --dry-run writes nothing.
+`--today YYYY-MM-DD` sets the checkpoint date, including the gate's stale checks and rotation checks.
+In in-repo memory, checkpoint prints exact staging paths and a suggested commit message
+without committing by default. `--commit` commits those paths on the current branch only;
+it never pushes. Install preserves project hooks and prints an integration line when needed.
+One .memory.lock covers all in-process steps. Writers wait up to 30 seconds; stale locks break
+only after ten minutes with a dead pid on this host. Foreign-host locks require manual inspection.
+
+## Fleet status
+
+Run `node engine/memory-fleet.mjs --root <projects> --json` from the kit. Installed copies use `node scripts/memory/memory-fleet.mjs`. Repeat `--root DIR` to scan immediate Git project folders; `--memory-home DIR` defaults to `~/.claude/projects` and scans its `*/memory` folders. The installer slug replaces every non-alphanumeric absolute-path character with a hyphen; matching is case-insensitive. Supply every relevant project parent to resolve memories. Unmatched memories are reported as orphan memory with no guessed project path.
+
+Each row reports kit version, Markdown file count and KB (1024 bytes), last commit date, commits in 30 days, gate FAIL/WARN counts and current/behind/not installed/no memory/orphan memory status. The installed gate runs with `--json --no-git`; otherwise the row says `kit gate`. Gate errors produce unknown counts. The scanner writes nothing, disables optional Git locks and skips symlink directories. It does not initialize, repair, commit or upgrade projects.
+
+Repeat `--exclude PATTERN` for case-insensitive substrings of project paths or memory folder names. Excluded folders are not opened or named in output; only the count is printed. Optional ignored `fleet.local.json` next to the script supplies `{"roots":[],"exclude":[]}`. CLI roots and exclusions extend those arrays. FLEET TRIGGERS follows the table.
+
+## Deferred-upgrade ledger
+
+`upgrades.json` holds entries with id, title, verdict (trigger or never), scope (project or fleet), reason, and a trigger's metric, op, value and optional positive-integer consecutive count. Supported operators are <, <=, >, >= and ==. Missing or malformed data is gate FAIL `config.upgrades`, not a crash. Installation seeds the ledger and upgrades add it when absent, preserving local decisions.
+
+`memory-measure.mjs` ends with TRIGGERS; fleet ends with FLEET TRIGGERS. DORMANT means false, FIRED means proven, NEVER is an explicit rejection, UNKNOWN means insufficient evidence. Search thresholds use the real `recall.totals.searchHitRate` field: 22/24 for whole-file search and 20/24 for vector search, interpreting the reference hit counts over 24 probes as fractions so other probe counts are comparable. Vector search requires two consecutive observations. Earlier JSON outputs from `--write LABEL` in the configured evidence folder are read newest first by modification time; keep probe definitions consistent across observations. No earlier observation means UNKNOWN when the current condition holds.
+
+Fleet metrics are `fleet.tinyIndexProjects` (installed memories under 15 KB whose generated index bytes exceed lesson bytes), `fleet.maxWarnProjects` (largest number of projects sharing one WARN id), and `fleet.committedFailProjects`. The last metric uses only projects and memories with a HEAD and clean Git status; a clean FAIL fires it, while uncommitted evidence without a proven clean FAIL remains UNKNOWN. Fleet never checks out or writes a committed snapshot.
+
+Measurement and the gate share `ladderWalk` in `memory-index.mjs`: router to index to catalog, including split catalog pages with cycle protection. JSON probe `ladderHop` is direct, index or catalog, and `ladderBytes` includes each navigation page on the selected path plus the target. `index.unreachable` warns for routed or indexed lessons/topics lacking that path; moved_to stubs, state files, ARCHIVE and notes pages are exempt.
+
+### Fleet execution policy
+
+Fleet defaults to the kit's own gate with each project's config and memory folder.
+Use `--project-gates` to execute trusted installed or marked vendored gates when
+comparing historical behavior. The default avoids executing project JavaScript;
+it can report new checks against older projects. Project gates reproduce the
+installed version but can run arbitrary project code. Git calls disable
+`core.fsmonitor`, signature display, clean/process filters and the untracked cache;
+they retain the ownership guard and disable lazy fetching.
+`core.hooksPath` is irrelevant: the queried `rev-parse`, `status`, `log`, and
+`rev-list` commands do not invoke hooks. No diff/patch or textconv is requested;
+Git runs without a pager. Submodules are labelled separately from worktrees.
+
+Capture methodology: keep one lesson per rule, not per incident. Use `mistake`,
+`practice` or `observation`; optional `trigger` is one line of at most 200 characters.
+Capture shows up to three similar memory lessons without blocking. `new` prints only
+the path on stdout and suggestions on stderr. Batch JSON has `{file, similar}` per
+created lesson and `repeated: [{file, repeats}]`; text suggestions use stderr.
+A repeat-only batch section accepts `repeat-of`, `cause`, `description` and `date`,
+with no body. It allocates no number. A `lesson.enforce` FAIL is printed and makes
+batch exit 1, but keeps the repeat and created files. Other unallowed affected FAILs
+roll back. `batchLessons` accepts an optional `check` runner (default `runCheck`) for
+transaction tests before all gate checks are installed.
+Repeats require a cause (`slip`, `not-recalled`, `rule-wrong`, `new-case`); conversion
+alone writes `legacy`. The full dated entry is at most 200 characters. At two repeats,
+decide where the mistake is visible; at four without a decision, record one. Every
+decision, including lesson-only by default, returns on a strictly later repeat.
+A changed rule becomes a new lesson using `supersedes`; capture its repeat as
+`rule-wrong`. Link shared incident background from each distinct rule's lesson.
+
+## 3.2.7 checks and operations
+
+Capture one lesson with `node scripts/memory/memory-lesson.mjs new --kind mistake --route <family> "<title>"`.
+For a batch, use a file outside memory: `## Title`, then `kind:`, `route:`, `description:`, a blank line and the body.
+Use `###` inside bodies. A repeat-only section has `repeat-of:`, `cause:`, `description:` and optional `date:`, no body.
+Repeat causes are slip, not-recalled, rule-wrong and new-case. Kind is mistake, practice or observation.
+`memory-lesson.mjs classify FILE [--write]` uses a version-1 JSON kinds map. `forgetting.repeats`, `repeatsPerMonth`
+and `repeatsByCause` measure recorded recurrence, not prose guesses.
+
+| Check / config | Default and response |
+| --- | --- |
+| `router.lines`, `caps.router.warnLines`, `caps.router.failLines` | WARN above 150, FAIL above 200 lines. Move detail down. |
+| `lesson.repeats`, `lesson.unfilled-body`, `lesson.kind` | FAIL malformed repeat entries, empty exact prompt sections, or invalid kinds. |
+| `lesson.enforce`, `caps.lesson.enforceAfterRepeats`, `caps.lesson.failAfterRepeats` | WARN at 2 and FAIL at 4 without a valid decision; WARN at 1 and FAIL at 4 strictly later repeats after a decision. |
+| `lesson.enforced`, `lesson.trigger`, `lesson.kind-missing` | WARN invalid decisions, missing repeat cues, or unclassified lessons. Invalid decisions also use no-decision escalation. |
+| `caps.lesson.lessonOnlyReturns` | true by default; false makes valid lesson-only decisions permanent. |
+| `date.future` | Compare to UTC today: +1 day WARN, later FAIL. |
+| `config.caps`, `enforce.rules` | FAIL invalid new caps or rules; repair the reported key/rule. |
+| `chars.replacement`, `chars.mojibake`, `chars.lost-dash` | Memory-only WARN; code skipped. |
+| `split.chain`, `topic.line`, `caps.topic.warnLineChars` | WARN chain problems or lines above 2000 characters; fences and verbatim payloads skipped. |
+
+Preview `node scripts/memory/memory-chars.mjs repair`, allow deliberate examples, then add `--write`.
+Only clean round-trip sequences are repaired; fix undecodable sequences, U+FFFD and lost dashes by hand.
+Run `node scripts/memory/memory-chains.mjs scan`, then `repair --write`; review gaps, numbering and parent order.
+`node scripts/memory/memory-chains.mjs lines --write` recuts paragraphs at sentence ends; lists and indented lines
+remain report-only. Session-start omits chars, split.chain and topic.line, so use the full gate after repairs.
+
+The installer/upgrade merge PreToolUse (Bash|PowerShell) and UserPromptSubmit hooks into `.claude/settings.json`.
+`--no-guard` persists `guard: false` in `scripts/memory/KIT.local.json`, preserving `memoryDir` and other keys.
+The kit-owned `enforce-rules.kit.json` is refreshed; host `enforce-rules.json` is seeded only when absent.
+`caps.guard.kitRules` and `caps.guard.rules` choose those paths. Starter actions are warn.
+Run `node scripts/memory/memory-guard.mjs test FILE` and `replay FILE`; switch a rule to deny only in the host
+version-1 override after replay is below 0.5 percent and every sampled hit is a real hazard.
+The prompt clock prints local time then UTC; warnings arrive as PreToolUse additionalContext.
+
+Upgrade pre-runs the incoming gate with merged config. Only new FAIL-capable ids in its explicit NEW_CHECKS list
+can be grandfathered by check plus file; unlisted regressions still roll back. The installed-gate comparison keeps
+its full finding identity. A tolerant incoming pre-run does not replace the strict installed gate. Legacy hints
+run lock-free with a 20-second timeout; upgrade never converts prose or rewrites host instruction lines.
+
+## Lesson casebook (3.2.8)
+
+Read `scripts/memory/LESSON-KINDS.md` for K0, T1-T4 and K1-K10 before choosing a kind.
+A true near-miss is practice when its title names the deliberate step; harm or an
+acted-on verdict is mistake. Tool behaviour under normal use is observation;
+our command shape is mistake. Label every row independently; record doubt in confidence.
+Use optional `new --case Kn`, batch `case: Kn`, or the classify `cases` map to write
+`metadata.kind_case`. `classify --case Kn` lists carriers. Missing/unknown cases
+produce `kind.case` WARN only when present; superseded ones get `kind.case-superseded`.
+Follow `scripts/memory/LABELLING.md` for two independent labellers: the kind test allows
+at most 6 of 40 disagreements, scaled down; person-set labels are takeaways, not a
+kind reference. Compare with `classify --score A.json B.json [--json]`.
+Settle obvious rows by citing a case; uncertain rows with no similar case go to
+a decision table for human review. No automatic bulk relabel or new memory types ship here.
+Use separate option values: `--name value`; the shared parser refuses `--name=value`.
+Hook/check file enforcement resolves symlinks and junctions and requires the real
+file to remain inside the repo. An invalid recorded decision still escalates and
+its `lesson.enforce` message ends with `; the recorded decision is invalid: <reason>`.
+
+People set optional `metadata.takeaway`: `fix` (an error and its remedy), `method`
+(the best way or next-time action), or `know` (how things work). Models label
+`kind` and never set `takeaway` by default. Capture an explicit person-set value with
+`new --takeaway fix`, batch `takeaway: fix`, or a classify `takeaways` map. Omitted
+values stay untouched. Recall shows it and filters with `--takeaway fix|method|know`.
+Invalid present values produce `lesson.takeaway` WARN, never FAIL.
