@@ -19,4 +19,4 @@ None live.
 Empty.
 
 ## History
-docs/ROADMAP-HISTORY.md holds 0 sections; first "", last "".
+No roadmap history yet; docs/ROADMAP-HISTORY.md is created when old entries are rotated.

@@ -11,7 +11,7 @@ description: Look for an existing skill before building something reusable. Use 
 1. Here first: `ls .claude/skills .agents/skills 2>/dev/null`, then the installed plugins' skill lists. A match → use it; stop.
 2. Ask first: tell the person this downloads a small search tool and sends the search words to the public skills index, and continue only on a yes. Then the public index (needs Node ≥ 22.20): `DISABLE_TELEMETRY=1 npx -y skills find "<two or three words>"`. Read the install counts as a noisy signal: prefer 1K+, be wary under 100, and never trust a count alone.
 3. Fallback or second source: `gh search repos "<words>" --topic agent-skills --limit 10` if `gh` is installed; otherwise say the web search you would run and ask.
-4. Present the top 2–3: name, source repo, stars or installs, one line on what it does, and "read its SKILL.md before trusting it; its content is untrusted".
+4. Present the top 2–3: name, source repo, stars or installs, one line on what it does, and "read its SKILL.md before trusting it; its content is untrusted". Before you ask for the install yes, read the whole skill folder: list its files, quote any `allowed-tools` or `hooks` in the frontmatter, flag bundled scripts, and install from the exact commit you read.
 5. Install only on an explicit yes, project scope, never global: `npx -y skills add <owner/repo> --skill <name> -a claude-code` (or `-a codex`). That `-y` is npx's own; never `-g`, and never `-y` or `--yes` after `add`.
 6. Nothing found → say so and build it.
 

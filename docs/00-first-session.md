@@ -116,7 +116,7 @@ You may type `skip` instead of an address. The notes are then saved only on this
 At the end the assistant reports, in order: the tools it found, your four answers, the notes folder, a gate line, and what it saved. The gate line begins:
 
 ```text
-memory-check 3.2.11 [all]: 0 FAIL, 0 WARN
+memory-check 3.2.12 [all]: 0 FAIL, 0 WARN
 ```
 
 `0 FAIL` is what matters (`0 WARN` once the backup is connected). To end the session type `/exit` and press Enter; the terminal is still in your project folder, so type `claude` to start again, then paste the three lines from
